@@ -144,7 +144,7 @@ NOTES:
  */
 int bitXor(int x, int y) // 0101 0011 = 0110
 {
-  // return (~x & y) + (x & ~y);
+  // return ~(~x & ~y) & ~(x & y);
   return ~(~(~x & y) & ~(x & ~y));
 }
 /*
@@ -192,15 +192,21 @@ int allOddBits(int x)
   // int y = 0b10101010;
   // y = (y << 8) + y;
   // printf("%d %d %d\n", y, y << 16, ~(-__INT32_MAX__));
+  // y = (y << 16) + y;
   // int temp = 0b1010101010101010;
   // int temp = 0b1010101010101100000000000000000;
   // int temp = 0b1010101010101010101010101010101;
   // int temp = 0b1010101010101010101010101010110;
-  // y = (y << 16) + y;
+
   // int mask = 0b1010101;
   int mask = 85;
   mask = (mask << 8) + mask;
   mask = (mask << 16) + mask;
+  // int y = 0xAAAAAAAA;
+  // int y = 0x80000001;
+  // int y = 0b1010101010101010101010101010110;
+  // int y = 0b101010101010101010101010101010;
+  // printf("%d %d\n", mask, y);
   // printf("%d %d %d %d\n", y, (y | mask), (y | mask) + 1, !((y | mask) + 1));
   return !((x | mask) + 1);
 
@@ -208,6 +214,7 @@ int allOddBits(int x)
   // int mask = 170;
   // mask = (mask << 8) + mask;
   // mask = (mask << 16) + mask;
+  // printf("%d\n", mask); //-1431655766
   // return !((x & mask) ^ mask);
 }
 /*
