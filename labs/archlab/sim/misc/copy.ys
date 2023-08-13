@@ -1,0 +1,46 @@
+# Execution begins at address 0
+        .pos 0
+        irmovq stack,%rsp # 设置栈指针
+        call main # 执行main程序
+        halt # 结束程序
+
+.align 8
+# Source block
+src:
+        .quad 0x00a
+        .quad 0x0b0
+        .quad 0xc00
+# Destination block
+dest:
+        .quad 0x111
+        .quad 0x222
+        .quad 0x333
+
+main:
+        irmovq $3,%rdi # long len
+        irmovq dest,%rsi # long *dest
+        irmovq src,%rdx # long *src
+        irmovq $8,%r8
+        irmovq $1,%r9
+        call copy_block
+        ret
+
+# long copy_block(long *src, long *dest, long len)
+copy_block:
+        xorq %rax,%rax # long result=0
+        jmp test
+loop:
+        mrmovq (%rdx),%rcx # long val=*src
+        addq %r8,%rdx # src++
+        rmmovq %rcx,(%rsi) # *dest=val
+        addq %r8,%rsi # dest++
+        xorq %rcx,%rax # result ^= val
+        subq %r9,%rdi # len --
+test:
+        andq %rdi,%rdi # while(len>0)
+        jne loop
+        ret
+
+# Stack starts here and grows to lower addresses 
+        .pos 0x100
+stack:

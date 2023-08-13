@@ -1,0 +1,94 @@
+                            | # Execution begins at address 0
+0x000:                      |         .pos 0
+0x000: 30f40001000000000000 |         irmovq stack,%rsp # 设置栈指针
+0x00a: 804800000000000000   |         call main # 执行main程序
+0x013: 00                   |         halt # 结束程序
+                            | 
+                            | # Sample linked list
+0x018:                      |         .align 8
+0x018:                      | ele1:
+0x018: 0a00000000000000     |         .quad 0x00a 
+0x020: 2800000000000000     |         .quad ele2
+0x028:                      | ele2:
+0x028: b000000000000000     |         .quad 0x0b0 
+0x030: 3800000000000000     |         .quad ele3
+0x038:                      | ele3:
+0x038: 000c000000000000     |         .quad 0xc00
+0x040: 0000000000000000     |         .quad 0
+                            | 
+0x048:                      | main:
+0x048: 30f71800000000000000 |         irmovq ele1,%rdi
+0x052: 805c00000000000000   |         call rsum_list
+0x05b: 90                   |         ret
+                            | 
+                            | # long rsum_list(list_ptr ls)
+                            | # %rdi 存放了参数 ls
+0x05c:                      | rsum_list:
+0x05c: a08f                 |         pushq %r8 # 只能放在这里，注意区分这个r8和函数返回地址在栈中的push和pop顺序
+                            |         # push顺序：push r8(1) push rsp(1) push r8(2) push rsp(2) push r8(3) push rsp(3) push r8(4)
+                            |         # pop顺序：pop r8(4) pop rbp(3) pop r8(3) pop rbp(2) pop r8(2) pop rbp(1) pop r8(1)
+0x05e: 6277                 |         andq %rdi,%rdi # ls!=nullptr，stop when 0
+0x060: 738800000000000000   |         je re
+0x069: 50870000000000000000 |         mrmovq (%rdi),%r8 # ls->val
+0x073: 50770800000000000000 |         mrmovq 8(%rdi),%rdi
+                            |         # 这里有一个隐式的pushq 返回地址 pushq %rsp
+0x07d: 805c00000000000000   |         call rsum_list
+0x086: 6086                 |         addq %r8,%rsi # rest+=ls->val
+0x088:                      | re: 
+0x088: b08f                 |         popq %r8
+                            |         # 这里有一个隐式的popq 返回地址 popq %rbp
+0x08a: 90                   |         ret
+                            | 
+                            | # 上面的这种是第一种思路，每次push结点的val值，返回时pop然后汇总
+                            | # 还有另一种思路是每次push结点的地址，返回时将rdi指向的地址还原，然后获取此时rdi指向的val值进行汇总
+                            | # 第一种思路是找的知乎上的答案抄的，第二种思路自己写的，犯了两个错误，都写在下面了
+                            | 
+                            | # 一种错误的方案，错因，从next结点的地址不能直接获取到前一个结点的地址
+                            | # rsum_list:
+                            | #         andq %rdi,%rdi # ls!=nullptr，stop when 0
+                            | #         je re
+                            |           # rdi每次等于一个链表结点的首地址
+                            |           # 通过0(rdi)获取结点的第一个8字节，val
+                            |           # 通过8(rdi)获取结点的第二个8字节，next
+                            | #         mrmovq 8(%rdi),%rdi 
+                            | #         call rsum_list
+                            | #         mrmovq -8(%rdi),%rdi
+                            |           # 通过next结点的-8(rdi)，并不能返回到原来的地址
+                            | #         mrmovq (%rdi),%r8 # ls->val
+                            | #         addq %r8,%rsi # rest+=ls->val
+                            | # re: 
+                            | #         ret
+                            | 
+                            | # 另一种错误的方案，错因：忽略了函数返回地址的入栈和出栈，把变量的入栈出栈和函数返回地址的入栈出栈弄混在一起了
+                            | # rsum_list:
+                            | #         andq %rdi,%rdi # ls!=nullptr，stop when 0
+                            | #         je re
+                            | #         rrmovq %rdi,%r8
+                            | #         pushq %r8
+                            | #         mrmovq 8(%rdi),%rdi
+                            | #         call rsum_list
+                            | #         rrmovq %r8,%rdi
+                            | #         mrmovq (%rdi),%r9 # ls->val
+                            | #         addq %r9,%rsi # rest+=ls->val
+                            | # re: 
+                            | #         popq %r8
+                            | #         ret
+                            | 
+                            | # 正确的方案：
+                            | # rsum_list:
+                            | #         pushq %r8
+                            | #         andq %rdi,%rdi # ls!=nullptr，stop when 0
+                            | #         je re
+                            | #         rrmovq %rdi,%r8
+                            | #         mrmovq 8(%rdi),%rdi
+                            | #         call rsum_list
+                            | #         rrmovq %r8,%rdi
+                            | #         mrmovq (%rdi),%r9 # ls->val
+                            | #         addq %r9,%rsi # rest+=ls->val
+                            | # re: 
+                            | #         popq %r8
+                            | #         ret
+                            | 
+                            | # Stack starts here and grows to lower addresses 
+0x100:                      |         .pos 0x100
+0x100:                      | stack:

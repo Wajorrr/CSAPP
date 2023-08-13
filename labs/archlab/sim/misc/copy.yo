@@ -1,0 +1,46 @@
+                            | # Execution begins at address 0
+0x000:                      |         .pos 0
+0x000: 30f40001000000000000 |         irmovq stack,%rsp # 设置栈指针
+0x00a: 804800000000000000   |         call main # 执行main程序
+0x013: 00                   |         halt # 结束程序
+                            | 
+0x018:                      | .align 8
+                            | # Source block
+0x018:                      | src:
+0x018: 0a00000000000000     |         .quad 0x00a
+0x020: b000000000000000     |         .quad 0x0b0
+0x028: 000c000000000000     |         .quad 0xc00
+                            | # Destination block
+0x030:                      | dest:
+0x030: 1101000000000000     |         .quad 0x111
+0x038: 2202000000000000     |         .quad 0x222
+0x040: 3303000000000000     |         .quad 0x333
+                            | 
+0x048:                      | main:
+0x048: 30f70300000000000000 |         irmovq $3,%rdi # long len
+0x052: 30f63000000000000000 |         irmovq dest,%rsi # long *dest
+0x05c: 30f21800000000000000 |         irmovq src,%rdx # long *src
+0x066: 30f80800000000000000 |         irmovq $8,%r8
+0x070: 30f90100000000000000 |         irmovq $1,%r9
+0x07a: 808400000000000000   |         call copy_block
+0x083: 90                   |         ret
+                            | 
+                            | # long copy_block(long *src, long *dest, long len)
+0x084:                      | copy_block:
+0x084: 6300                 |         xorq %rax,%rax # long result=0
+0x086: 70ab00000000000000   |         jmp test
+0x08f:                      | loop:
+0x08f: 50120000000000000000 |         mrmovq (%rdx),%rcx # long val=*src
+0x099: 6082                 |         addq %r8,%rdx # src++
+0x09b: 40160000000000000000 |         rmmovq %rcx,(%rsi) # *dest=val
+0x0a5: 6086                 |         addq %r8,%rsi # dest++
+0x0a7: 6310                 |         xorq %rcx,%rax # result ^= val
+0x0a9: 6197                 |         subq %r9,%rdi # len --
+0x0ab:                      | test:
+0x0ab: 6277                 |         andq %rdi,%rdi # while(len>0)
+0x0ad: 748f00000000000000   |         jne loop
+0x0b6: 90                   |         ret
+                            | 
+                            | # Stack starts here and grows to lower addresses 
+0x100:                      |         .pos 0x100
+0x100:                      | stack:

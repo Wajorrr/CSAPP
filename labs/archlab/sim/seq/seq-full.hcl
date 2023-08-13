@@ -106,42 +106,42 @@ word ifun = [
 
 bool instr_valid = icode in 
 	{ INOP, IHALT, IRRMOVQ, IIRMOVQ, IRMMOVQ, IMRMOVQ,
-	       IOPQ, IJXX, ICALL, IRET, IPUSHQ, IPOPQ };
+	       IOPQ, IJXX, ICALL, IRET, IPUSHQ, IPOPQ, IIADDQ }; # 指令集
 
-# Does fetched instruction require a regid byte?
+# Does fetched instruction require a regid byte? 指令是否包括寄存器指示字节
 bool need_regids =
 	icode in { IRRMOVQ, IOPQ, IPUSHQ, IPOPQ, 
-		     IIRMOVQ, IRMMOVQ, IMRMOVQ };
+		     IIRMOVQ, IRMMOVQ, IMRMOVQ, IIADDQ };
 
-# Does fetched instruction require a constant word?
+# Does fetched instruction require a constant word? 指令是否包括常量值
 bool need_valC =
-	icode in { IIRMOVQ, IRMMOVQ, IMRMOVQ, IJXX, ICALL };
+	icode in { IIRMOVQ, IRMMOVQ, IMRMOVQ, IJXX, ICALL, IIADDQ };
 
 ################ Decode Stage    ###################################
 
-## What register should be used as the A source?
+## What register should be used as the A source? 指令中哪个寄存器会赋值给valA
 word srcA = [
 	icode in { IRRMOVQ, IRMMOVQ, IOPQ, IPUSHQ  } : rA;
 	icode in { IPOPQ, IRET } : RRSP;
 	1 : RNONE; # Don't need register
 ];
 
-## What register should be used as the B source?
+## What register should be used as the B source? 指令中哪个寄存器会赋值给valB
 word srcB = [
-	icode in { IOPQ, IRMMOVQ, IMRMOVQ  } : rB;
+	icode in { IOPQ, IRMMOVQ, IMRMOVQ, IIADDQ } : rB;
 	icode in { IPUSHQ, IPOPQ, ICALL, IRET } : RRSP;
 	1 : RNONE;  # Don't need register
 ];
 
-## What register should be used as the E destination?
+## What register should be used as the E destination? 指令中哪个寄存器会被赋值为valE
 word dstE = [
 	icode in { IRRMOVQ } && Cnd : rB;
-	icode in { IIRMOVQ, IOPQ} : rB;
+	icode in { IIRMOVQ, IOPQ, IIADDQ } : rB;
 	icode in { IPUSHQ, IPOPQ, ICALL, IRET } : RRSP;
 	1 : RNONE;  # Don't write any register
 ];
 
-## What register should be used as the M destination?
+## What register should be used as the M destination? 指令中哪个寄存器会被赋值为valM
 word dstM = [
 	icode in { IMRMOVQ, IPOPQ } : rA;
 	1 : RNONE;  # Don't write any register
@@ -149,19 +149,19 @@ word dstM = [
 
 ################ Execute Stage   ###################################
 
-## Select input A to ALU
+## Select input A to ALU 指令放入ALU中的第一个值
 word aluA = [
 	icode in { IRRMOVQ, IOPQ } : valA;
-	icode in { IIRMOVQ, IRMMOVQ, IMRMOVQ } : valC;
+	icode in { IIRMOVQ, IRMMOVQ, IMRMOVQ, IIADDQ } : valC;
 	icode in { ICALL, IPUSHQ } : -8;
 	icode in { IRET, IPOPQ } : 8;
 	# Other instructions don't need ALU
 ];
 
-## Select input B to ALU
+## Select input B to ALU 指令放入ALU中的第二个值
 word aluB = [
 	icode in { IRMMOVQ, IMRMOVQ, IOPQ, ICALL, 
-		      IPUSHQ, IRET, IPOPQ } : valB;
+		      IPUSHQ, IRET, IPOPQ, IIADDQ } : valB;
 	icode in { IRRMOVQ, IIRMOVQ } : 0;
 	# Other instructions don't need ALU
 ];
@@ -172,8 +172,8 @@ word alufun = [
 	1 : ALUADD;
 ];
 
-## Should the condition codes be updated?
-bool set_cc = icode in { IOPQ };
+## Should the condition codes be updated? 是否更新条件码寄存器
+bool set_cc = icode in { IOPQ, IIADDQ };
 
 ################ Memory Stage    ###################################
 

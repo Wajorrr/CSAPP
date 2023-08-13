@@ -2,14 +2,33 @@
 /********** Typedefs ************/
 
 /* EX stage mux settings */
-typedef enum { MUX_NONE, MUX_EX_A, MUX_EX_B, MUX_MEM_E,
-	       MUX_WB_M, MUX_WB_E } mux_source_t;
+typedef enum
+{
+  MUX_NONE,
+  MUX_EX_A,
+  MUX_EX_B,
+  MUX_MEM_E,
+  MUX_WB_M,
+  MUX_WB_E
+} mux_source_t;
 
 /* Simulator operating modes */
-typedef enum { S_WEDGED, S_STALL, S_FORWARD } sim_mode_t;
+typedef enum
+{
+  S_WEDGED,
+  S_STALL,
+  S_FORWARD
+} sim_mode_t;
 
 /* Pipeline stage identifiers for stage operation control */
-typedef enum { IF_STAGE, ID_STAGE, EX_STAGE, MEM_STAGE, WB_STAGE } stage_id_t;
+typedef enum
+{
+  IF_STAGE,
+  ID_STAGE,
+  EX_STAGE,
+  MEM_STAGE,
+  WB_STAGE
+} stage_id_t;
 
 /********** Defines **************/
 
@@ -18,7 +37,6 @@ typedef enum { IF_STAGE, ID_STAGE, EX_STAGE, MEM_STAGE, WB_STAGE } stage_id_t;
 
 /* Get rb out of one byte regid field */
 #define GET_RB(r) LO4(r)
-
 
 /************ Global state declaration ****************/
 
@@ -44,7 +62,7 @@ extern stat_t stat;
 extern mux_source_t amux, bmux;
 
 /* Provide global access to current states of all pipeline registers */
-pipe_ptr pc_state, if_id_state, id_ex_state, ex_mem_state, mem_wb_state;
+// pipe_ptr pc_state, if_id_state, id_ex_state, ex_mem_state, mem_wb_state;
 
 /* Current States */
 extern pc_ptr pc_curr;
@@ -69,7 +87,6 @@ extern word_t wb_valM;
 extern word_t mem_addr;
 extern word_t mem_data;
 extern bool_t mem_write;
-
 
 /* Intermdiate stage values that must be used by control functions */
 extern word_t f_pc;
@@ -125,9 +142,8 @@ void sim_set_dumpfile(FILE *file);
  * sim_log dumps a formatted string to the dumpfile, if it exists
  * accepts variable argument list
  */
-void sim_log( const char *format, ... );
+void sim_log(const char *format, ...);
 
- 
 /******************* GUI Interface Functions **********************/
 #ifdef HAS_GUI
 
@@ -136,10 +152,10 @@ void signal_sources();
 void signal_register_clear();
 
 void report_pc(unsigned fpc, unsigned char fpcv,
-	       unsigned dpc, unsigned char dpcv,
-	       unsigned epc, unsigned char epcv,
-	       unsigned mpc, unsigned char mpcv,
-	       unsigned wpc, unsigned char wpcv);
+               unsigned dpc, unsigned char dpcv,
+               unsigned epc, unsigned char epcv,
+               unsigned mpc, unsigned char mpcv,
+               unsigned wpc, unsigned char wpcv);
 
 void report_state(char *id, word_t current, char *txt);
 
@@ -150,4 +166,3 @@ void show_stat(stat_t stat);
 void create_memory_display();
 void set_memory(word_t addr, word_t val);
 #endif
-								       
