@@ -70,96 +70,10 @@ team_t team = {
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char *)(bp)-WSIZE))) // 给定block的指针bp，返回下个block的指针bp
 #define PREV_BLKP(bp) ((char *)(bp)-GET_SIZE(((char *)(bp)-DSIZE)))   // 给定block的指针bp，返回上个block的指针bp
 
-/* Segregated Free Lists */
-#define GET_HEAD(num) (heap_listp + WSIZE * num)  // 给定序号，找到对应链表头节点位置
-#define GET_PRE(bp) (*(unsigned int *)(bp))       // 给定bp,找到前驱
-#define GET_SUC(bp) (*((unsigned int *)(bp) + 1)) // 给定bp,找到后继
-#define SET_PRE(bp, val) (*(unsigned int *)(bp) = (val))
-#define SET_SUC(bp, val) (*((unsigned int *)(bp) + 1) = (val))
-#define CLASS_NUM 508 // 大小类的数量，要么20左右(大小范围不能超过数据类型所能表示的范围)，要么506到506+10左右(小的块单独一个大小类)
-
 void *heap_listp; // 链表头部
+void *pre_ptr;    // next_fit使用，标记上一次适配完成时的指针位置，注意在空闲块合并时需要对这个指针进行更新
 
-// 找到块大小对应的大小类空闲链表的序号
-int search(size_t size)
-{
-    int i;
-    if (CLASS_NUM < 505) // 按幂对大小类分类
-    {
-        for (i = 4; i < 3 + CLASS_NUM; i++)
-        {
-            if (size <= (1 << i))
-                return i - 4;
-        }
-        return i - 4; // [0,19]
-    }
-    else // 小的块单独分，大的块按幂分
-    {
-        // 0-16、1-18、2-20、...、503-1022、504-1024
-        // 小的块
-        if (size <= 1024)
-            return size / 2 - 8;
-        // 大的块
-        int r = 1024;
-        for (i = 1; i < CLASS_NUM - 505; i++)
-        {
-            r *= 2;
-            if (size <= r)
-                return 504 + i;
-        }
-        return CLASS_NUM - 1;
-    }
-}
-
-// 将空闲块插入到相应链表的头部
-void insert(void *bp)
-{
-    // 块大小
-    size_t size = GET_SIZE(HDRP(bp));
-    // 根据块大小找到对应链表的编号
-    int num = search(size);
-    void *head = GET_HEAD(num);
-    void *first = GET(head);
-    if (first == NULL) // 若链表为空
-    {
-        SET_PRE(bp, NULL);
-        SET_SUC(bp, NULL);
-    }
-    else // 若链表非空
-    {
-        void *first = GET(head);
-        SET_SUC(bp, first); // bp的后继指针放链表的头节点
-        SET_PRE(first, bp); // 原头节点的前驱指针放bp
-        SET_PRE(bp, NULL);  // bp的前驱指针置为NULL
-    }
-    PUT(head, bp); // 链表的头结点放bp
-}
-
-// 分配块，将块从链表中删除
-void delete(void *bp)
-{
-    size_t size = GET_SIZE(HDRP(bp)); // 块大小
-    int num = search(size);           // 根据块大小找到对应链表序号
-    void *head = GET_HEAD(num);
-    void *pre = GET_PRE(bp);
-    void *nex = GET_SUC(bp);
-    SET_PRE(bp, NULL);
-    SET_SUC(bp, NULL);
-    if (pre == NULL)
-    {
-        if (nex != NULL)
-            SET_PRE(nex, NULL);
-        PUT(head, nex);
-    }
-    else
-    {
-        if (nex != NULL)
-            SET_PRE(nex, pre);
-        SET_SUC(pre, nex);
-    }
-}
-
-// 分离空闲链表的合并操作
+// 空闲块合并，返回合并后整个空闲块的bp
 static void *coalesce(void *bp)
 {
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp))); // 获取前一个块是否已被分配
@@ -168,19 +82,16 @@ static void *coalesce(void *bp)
 
     if (prev_alloc && next_alloc) /* Case 1 */ // 前后都是已分配块，直接返回
     {
-        insert(bp);
         return bp;
     }
     else if (prev_alloc && !next_alloc) /* Case 2 */ // 前面是已分配块，后面是空闲块
     {
-        delete (NEXT_BLKP(bp));
         size += GET_SIZE(HDRP(NEXT_BLKP(bp))); // size加上后面空闲块的size
         PUT(HDRP(bp), PACK(size, 0));          // 更新header中的size
         PUT(FTRP(bp), PACK(size, 0));          // 更新footer中的size
     }
     else if (!prev_alloc && next_alloc) /* Case 3 */ // 前面是空闲块，后面是已分配块
     {
-        delete (PREV_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));   // size加上前面空闲块的size
         PUT(FTRP(bp), PACK(size, 0));            // 更新header中的size
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0)); // 更新footer中的size
@@ -188,15 +99,12 @@ static void *coalesce(void *bp)
     }
     else /* Case 4 */ // 前后都是空闲块
     {
-        delete (PREV_BLKP(bp));
-        delete (NEXT_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
                 GET_SIZE(FTRP(NEXT_BLKP(bp)));   // size加上前后空闲块的size
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0)); // 更新header中的size
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0)); // 更新footer中的size
         bp = PREV_BLKP(bp);                      // bp更新为前面块的bp
     }
-    insert(bp);
     return bp;
 }
 
@@ -220,22 +128,21 @@ static void *extend_heap(size_t words)
     return coalesce(bp); // 检查是否可以合并，可以合并则合并并返回合并后的指针
 }
 
-// 分离空闲链表的初始化操作，需要为大小类头指针预先分配空间
-int mm_init(void)
+/*
+ * mm_init - initialize the malloc package.
+ */
+int mm_init(void) // 成功返回0，失败返回-1
 {
-    // 在之前4个字的基础上加上大小类头指针所需的空间
-    if ((heap_listp = mem_sbrk((4 + CLASS_NUM) * WSIZE)) == (void *)-1)
+    /* Create the initial empty heap */
+    if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void *)-1) // 先申请4个字(16bytes)的空间
         return -1;
-    // 初始化大小类头指针
-    for (int i = 0; i < CLASS_NUM; i++)
-    {
-        PUT(heap_listp + i * WSIZE, NULL);
-    }
+    PUT(heap_listp, 0); /* Alignment padding */                          // 第一个字是一个双字边界对齐的不使用的填充字
+    PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1)); /* Prologue header */ // 序言块头，序言块的size为两个字(8bytes)，标记为已分配
+    PUT(heap_listp + (2 * WSIZE), PACK(DSIZE, 1)); /* Prologue footer */ // 序言块尾，序言块的size为两个字(8bytes)，标记为已分配
+    PUT(heap_listp + (3 * WSIZE), PACK(0, 1)); /* Epilogue header */     // 结尾块，size为0，标记为已分配
+    heap_listp += (2 * WSIZE);
 
-    PUT(heap_listp + CLASS_NUM * WSIZE, 0);                      // 双字边界对齐的不使用的填充字
-    PUT(heap_listp + ((1 + CLASS_NUM) * WSIZE), PACK(DSIZE, 1)); // 序言块头
-    PUT(heap_listp + ((2 + CLASS_NUM) * WSIZE), PACK(DSIZE, 1)); // 序言块尾
-    PUT(heap_listp + ((3 + CLASS_NUM) * WSIZE), PACK(0, 1));     // 结尾块
+    pre_ptr = heap_listp;
 
     /* Extend the empty heap with a free block of CHUNKSIZE bytes */
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL) // 将堆的大小扩展1个page
@@ -243,41 +150,83 @@ int mm_init(void)
     return 0;
 }
 
-// 分离空闲链表的查找合适空闲块操作
-static void *find_fit(size_t asize)
+// 首次适配，顺序找到第一个合适大小的块进行分配
+static void *first_fit(size_t asize)
 {
-    int num = search(asize); // 找到asize对应的大小类空闲链表
-    void *bp;
-
-    while (num < CLASS_NUM) // 如果找不到合适的块，那么就搜索下一个更大的大小类，找大的块进行分配然后分割
+    void *ptr;
+    for (ptr = heap_listp; GET_SIZE(HDRP(ptr)) > 0; ptr = NEXT_BLKP(ptr)) // 遍历到结尾size=0的结尾块时结束循环
     {
-        bp = GET(GET_HEAD(num));
-        while (bp) // 顺序搜索当前大小类空闲链表
-        {
-            if (GET_SIZE(HDRP(bp)) >= asize)
-            {
-                return bp;
-            }
-            bp = GET_SUC(bp); // 下一块
-        }
-        num++; // 找不到合适的块，搜索下一个更大的大小类
+        if (!GET_ALLOC(HDRP(ptr)) && GET_SIZE(HDRP(ptr)) >= asize)
+            return ptr;
     }
     return NULL;
 }
 
-// 分离空闲链表的分配与分割操作
+// 这样子写会报错，不知道为啥。。。
+// 看了下知乎上的评论，原来是当block被分配之后，若又被free了，然后在free操作中和前面的空闲block合并了，则当前的header会失效
+// 而若find fit时仍按照当前的header进行分配，则会只使用当前空闲块的后一部分，当前空闲块再次被分配时，会出现重复分配
+// 下一次适配，从上一次适配的块位置开始进行顺序寻找适配，若没找到则从头开始
+static void *next_fit(size_t asize)
+{
+    void *ptr;
+    for (ptr = pre_ptr; GET_SIZE(HDRP(ptr)) > 0; ptr = NEXT_BLKP(ptr)) // 遍历到结尾size=0的结尾块时结束循环
+    {
+        if (!GET_ALLOC(HDRP(ptr)) && GET_SIZE(HDRP(ptr)) >= asize) // 先从上一次的块开始找
+        {
+            pre_ptr = ptr;
+            return ptr;
+        }
+    }
+    for (ptr = heap_listp; ptr != pre_ptr; ptr = NEXT_BLKP(ptr)) // 若没找到，则再重头开始找
+    {
+        if (!GET_ALLOC(HDRP(ptr)) && GET_SIZE(HDRP(ptr)) >= asize)
+        {
+            pre_ptr = ptr;
+            return ptr;
+        }
+    }
+    return NULL;
+}
+
+// 最佳适配，寻找满足请求所需大小的最小大小的块进行分配
+static void *best_fit(size_t asize)
+{
+    void *ptr;
+    void *best_bp = NULL;
+    size_t min_size = 0x3f3f3f3f;
+    for (ptr = heap_listp; GET_SIZE(HDRP(ptr)) > 0; ptr = NEXT_BLKP(ptr)) // 遍历到结尾size=0的结尾块时结束循环
+    {
+        if (!GET_ALLOC(HDRP(ptr)) && GET_SIZE(HDRP(ptr)) >= asize)
+        {
+            if (min_size > GET_SIZE(HDRP(ptr))) // 找适合所需空间的最小空闲块
+            {
+                min_size = GET_SIZE(HDRP(ptr));
+                best_bp = ptr;
+            }
+        }
+    }
+    return best_bp;
+}
+
+// 显式空闲链表的查找空闲块操作
+static void *find_fit(size_t asize)
+{
+    //  return first_fit(asize);
+    return next_fit(asize);
+    //  return best_fit(asize);
+}
+
+// 显式空闲链表的分配与分割操作
 static void place(void *bp, size_t asize) // 已在当前bp位置找到合适的空闲块，在当前位置分配一个asize大小的块
 {
     size_t bsize = GET_SIZE(HDRP(bp)); // 当前空闲块的实际大小
 
-    delete (bp);
     if (bsize - asize >= 2 * DSIZE) // 若分配asize后剩余空间大于最小可分配大小，则分割空闲块
     {
         PUT(HDRP(bp), PACK(asize, 1));                    // 更新header中的size和是否分配位
         PUT(FTRP(bp), PACK(asize, 1));                    // 更新footer中的size和是否分配位
         PUT(HDRP(NEXT_BLKP(bp)), PACK(bsize - asize, 0)); // 更新剩余空间的header
         PUT(FTRP(NEXT_BLKP(bp)), PACK(bsize - asize, 0)); // 更新剩余空间的footer
-        insert(NEXT_BLKP(bp));
     }
     else // 若分配asize后剩余空间小于最小可分配大小，则直接分配整个空闲块
     {
@@ -333,7 +282,8 @@ void mm_free(void *ptr)
 
     PUT(HDRP(ptr), PACK(size, 0)); // header指示为空闲块
     PUT(FTRP(ptr), PACK(size, 0)); // footer指示为空闲块
-    coalesce(ptr);
+    // coalesce(ptr);
+    pre_ptr = coalesce(ptr);
 }
 
 /*
@@ -353,3 +303,67 @@ void *mm_realloc(void *ptr, size_t size)
     mm_free(ptr);
     return newptr;
 }
+
+// 失败的尝试
+// void *mm_realloc(void *ptr, size_t size)
+// {
+//     void *oldptr = ptr;
+//     void *newptr;
+//     size_t copySize;
+//     if (oldptr == NULL)
+//     {
+//         newptr = mm_malloc(size);
+//         return newptr;
+//     }
+//     if (size == 0)
+//     {
+//         mm_free(oldptr);
+//         return NULL;
+//     }
+//     size_t rsize = GET_SIZE(HDRP(oldptr)) - size;
+//     if (rsize >= 0)
+//     {
+//         if (rsize >= 2 * DSIZE)
+//         {
+//             PUT(HDRP(oldptr), PACK(size, 1));
+//             PUT(FTRP(oldptr), PACK(size, 1));
+//             PUT(HDRP(NEXT_BLKP(oldptr)), PACK(rsize, 0));
+//             PUT(FTRP(NEXT_BLKP(oldptr)), PACK(rsize, 0));
+//             coalesce(NEXT_BLKP(oldptr));
+//         }
+//         return oldptr;
+//     }
+//     else
+//     {
+//         size_t nsize = GET_SIZE(HDRP(NEXT_BLKP(oldptr)));
+//         if (!GET_ALLOC(HDRP(NEXT_BLKP(oldptr))) && nsize >= -rsize)
+//         {
+//             if (nsize - (-rsize) >= WSIZE * 2)
+//             {
+//                 PUT(HDRP(oldptr), PACK(size, 1));
+//                 PUT(FTRP(oldptr), PACK(size, 1));
+//                 PUT(HDRP(NEXT_BLKP(oldptr)), PACK(nsize - (-rsize), 1));
+//                 PUT(FTRP(NEXT_BLKP(oldptr)), PACK(nsize - (-rsize), 1));
+//             }
+//             else
+//             {
+//                 PUT(HDRP(oldptr), PACK(GET_SIZE(HDRP(oldptr)) + nsize, 1));
+//                 PUT(FTRP(oldptr), PACK(GET_SIZE(HDRP(oldptr)) + nsize, 1));
+//             }
+//             return oldptr;
+//         }
+//         else
+//         {
+//             newptr = mm_malloc(size);
+//             if (newptr == NULL)
+//                 return NULL;
+//             // copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+//             copySize = GET_SIZE(HDRP(oldptr));
+//             // if (size < copySize)
+//             //     copySize = size;
+//             memcpy(newptr, oldptr, copySize);
+//             mm_free(oldptr);
+//             return newptr;
+//         }
+//     }
+// }

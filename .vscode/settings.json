@@ -1,6 +1,12 @@
 {
     "files.associations": {
         "cachelab.h": "c",
-        "signal.h": "c"
+        "signal.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "initializer_list": "c",
+        "utility": "c",
+        "mm.h": "c",
+        "stdio.h": "c"
     }
 }

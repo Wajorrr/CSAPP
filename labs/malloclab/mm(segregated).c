@@ -76,7 +76,7 @@ team_t team = {
 #define GET_SUC(bp) (*((unsigned int *)(bp) + 1)) // 给定bp,找到后继
 #define SET_PRE(bp, val) (*(unsigned int *)(bp) = (val))
 #define SET_SUC(bp, val) (*((unsigned int *)(bp) + 1) = (val))
-#define CLASS_NUM 508 // 大小类的数量，要么20左右(大小范围不能超过数据类型所能表示的范围)，要么506到506+10左右(小的块单独一个大小类)
+#define CLASS_NUM 20 // 大小类的数量，要么20左右(大小范围不能超过数据类型所能表示的范围)，要么506到506+10左右(小的块单独一个大小类)
 
 void *heap_listp; // 链表头部
 
